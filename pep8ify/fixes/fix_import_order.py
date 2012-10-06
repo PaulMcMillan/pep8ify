@@ -97,7 +97,7 @@ class FixImportOrder(BaseFix):
                 sort_prefix = '0'
             else:
                 sort_prefix = '1'
-            return sort_prefix + base
+            return sort_prefix + base.lower()
 
         all_lists = [sorted(lst, key=_get_import_sort_key) for lst in 
                      (cat_stdlib, cat_external, cat_local)]
