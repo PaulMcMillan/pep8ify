@@ -1,6 +1,7 @@
 from lib2to3.fixer_base import BaseFix
 from lib2to3.pygram import python_symbols as symbols
 from lib2to3.fixer_util import is_import, syms, Node
+import itertools
 
 import pdb
 from pprint import pprint
@@ -16,18 +17,22 @@ def empty_stmt():
     new_stmt = Node(syms.simple_stmt, [new_expr])
     new_stmt.changed()
     return new_stmt
+
 BUILTINS = ['time', 'os', 'sys', 'math', 're', 'string', 'json']
-print symbols.import_name
+
 class FixImportOrder(BaseFix):
     u'''
     Imports should be sorted alphabetically in groups.
     '''
     def start_tree(self, tree, filename):
 #        pst()
-        # Trim the prefix so header comments don't get juggled
-        prefix_sep = '\n\n'
-        original_prefix, _, tail = tree.prefix.rpartition(prefix_sep)
-        tree.prefix = tail
+#        # Trim the prefix so header comments don't get juggled
+#        prefix_sep = '\n\n'
+#        original_prefix, _, tail = tree.prefix.rpartition(prefix_sep)
+#        tree.prefix = tail
+        original_prefix = tree.prefix
+        tree.prefix = ''
+        # Import categories to sort into
         cat_builtins = []
         cat_external = []
         cat_local = []
@@ -56,21 +61,30 @@ class FixImportOrder(BaseFix):
             cat_external.append(node)
 
         def sortem(node):
-            return str(node).replace(node.prefix, '', 1)
-        cur_list = cat_builtins
-        all_lists = [cat_external, cat_local]
-        for i, node in enumerate(sorted(cat_builtins, key=sortem) +
-                                 sorted(cat_external, key=sortem) +
-                                 sorted(cat_local, key=sortem)
-                                 ):
+            base = str(node).replace(node.prefix, '', 1).strip()
+            if base.startswith('import'):
+                sort_prefix = '0'
+            else:
+                sort_prefix = '1'
+            return sort_prefix + base
+
+        all_lists = [sorted(lst, key=sortem) for lst in 
+                     (cat_builtins, cat_external, cat_local)]
+        cur_list = []
+        for i, node in enumerate(itertools.chain(*all_lists)):
             node.prefix = node.prefix.lstrip()
+            # newline separators between lists. hacky.
             while node not in cur_list:
-                node.prefix = '\n' + node.prefix
                 cur_list = all_lists.pop(0)
+                # don't add a newline above the first group
+                if node in cur_list and i != 0:
+                    node.prefix = '\n' + node.prefix
+
             tree.set_child(i, node)
             
         # put the old prefix material back
-        tree.prefix = original_prefix + prefix_sep + tree.prefix
+#        tree.prefix = original_prefix + prefix_sep + tree.prefix
+        tree.prefix = original_prefix + tree.prefix
 
 
     def match(self, node):
