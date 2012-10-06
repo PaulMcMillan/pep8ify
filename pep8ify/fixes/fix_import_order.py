@@ -5,12 +5,10 @@ import os
 import pkgutil
 import sys
 from lib2to3.fixer_base import BaseFix
-from lib2to3.fixer_util import is_import, syms, Node
+from lib2to3.fixer_util import is_import
 from lib2to3.pygram import python_symbols as symbols
 
 import snakefood.find
-
-
 
 
 class FixImportOrder(BaseFix):
@@ -60,8 +58,8 @@ class FixImportOrder(BaseFix):
             # otherwise, it's external package
             cat_external.append(node)
 
-        all_lists = [sorted(lst, key=self.get_import_sort_key) for lst in 
-                     (cat_stdlib, cat_external, cat_local)]
+        all_lists = [sorted(lst, key=self.get_import_sort_key)
+                     for lst in (cat_stdlib, cat_external, cat_local)]
         cur_list = []
         for i, node in enumerate(itertools.chain(*all_lists)):
             node.prefix = node.prefix.lstrip()
@@ -71,7 +69,7 @@ class FixImportOrder(BaseFix):
                 # don't add a newline before the first group
                 if node in cur_list and i != 0:
                     node.prefix = '\n' + node.prefix
-            # Assign the node to its new location, overwriting the old
+            # Assign each node to its new location, overwriting the old
             tree.set_child(i, node)
             
         # put the old prefix material back
@@ -81,7 +79,7 @@ class FixImportOrder(BaseFix):
     def match(self, node):
         return False
 
-    @classmethod
+    @staticmethod
     def is_stdlib(modname):
         """ Check a base module name to see if it's part of the Python
         standard library.
@@ -99,7 +97,7 @@ class FixImportOrder(BaseFix):
         # If we haven't found it yet, it's not in stdlib
         return False
 
-    @classmethod
+    @staticmethod
     def get_import_sort_key(node):
         """ Given a node, derive a sort key for order comparison. """
         # remove any prefix (comments and whitespace)
