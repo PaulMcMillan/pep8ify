@@ -11,29 +11,6 @@ from lib2to3.pygram import python_symbols as symbols
 import snakefood.find
 
 
-def is_stdlib(modname):
-    """ Check a base module name to see if it's part of the Python
-    standard library.
-    """
-    # Is it a builtin?
-    if modname in sys.builtin_module_names:
-        return True
-    stdlib_path = sysconfig.get_python_lib(standard_lib=True)
-    # Handle dynamically loaded modules
-    dynload_path = os.path.join(stdlib_path, 'lib-dynload')
-    for path in (stdlib_path, dynload_path):
-        if pkgutil.ImpImporter(path).find_module(modname):
-            # If we get back a loader, it's a module
-            return True
-    # If we haven't found it yet, it's not in stdlib
-    return False
-
-
-def empty_stmt():
-    new_expr = Node(syms.expr_stmt, [])
-    new_stmt = Node(syms.simple_stmt, [new_expr])
-    new_stmt.changed()
-    return new_stmt
 
 
 class FixImportOrder(BaseFix):
@@ -61,7 +38,7 @@ class FixImportOrder(BaseFix):
             base_module = module.split('.')[0]
 
             # Is the node part of the stdlib?
-            if is_stdlib(base_module):
+            if self.is_stdlib(base_module):
                 cat_stdlib.append(node)
                 continue
             
@@ -83,18 +60,7 @@ class FixImportOrder(BaseFix):
             # otherwise, it's external package
             cat_external.append(node)
 
-        def _get_import_sort_key(node):
-            """ Given a node, derive a sort key for order comparison. """
-            # remove any prefix (comments and whitespace)
-            base = str(node).replace(node.prefix, '', 1).strip()
-            # put "import"s before "from ..."s
-            if base.startswith('import'):
-                sort_prefix = '0'
-            else:
-                sort_prefix = '1'
-            return sort_prefix + base.lower()
-
-        all_lists = [sorted(lst, key=_get_import_sort_key) for lst in 
+        all_lists = [sorted(lst, key=self.get_import_sort_key) for lst in 
                      (cat_stdlib, cat_external, cat_local)]
         cur_list = []
         for i, node in enumerate(itertools.chain(*all_lists)):
@@ -114,3 +80,33 @@ class FixImportOrder(BaseFix):
     # Required method, even though we do all our fixups in the tree
     def match(self, node):
         return False
+
+    @classmethod
+    def is_stdlib(modname):
+        """ Check a base module name to see if it's part of the Python
+        standard library.
+        """
+        # Is it a builtin?
+        if modname in sys.builtin_module_names:
+            return True
+        stdlib_path = sysconfig.get_python_lib(standard_lib=True)
+        # Handle dynamically loaded modules
+        dynload_path = os.path.join(stdlib_path, 'lib-dynload')
+        for path in (stdlib_path, dynload_path):
+            if pkgutil.ImpImporter(path).find_module(modname):
+                # If we get back a loader, it's a module
+                return True
+        # If we haven't found it yet, it's not in stdlib
+        return False
+
+    @classmethod
+    def get_import_sort_key(node):
+        """ Given a node, derive a sort key for order comparison. """
+        # remove any prefix (comments and whitespace)
+        base = str(node).replace(node.prefix, '', 1).strip()
+        # put "import"s before "from ..."s
+        if base.startswith('import'):
+            sort_prefix = '0'
+        else:
+            sort_prefix = '1'
+        return sort_prefix + base.lower()
