@@ -9,15 +9,35 @@ pst = pdb.set_trace
 import compiler
 import snakefood.find
 import pkgutil
+import distutils.sysconfig as sysconfig
 import os
+import sys
+import pkgutil
+
+
+def is_stdlib(modname):
+    """ Check a base module name to see if it's part of the Python
+    standard library.
+    """
+    # Is it a builtin?
+    if modname in sys.builtin_module_names:
+        return True
+    stdlib_path = sysconfig.get_python_lib(standard_lib=True)
+    # Handle dynamically loaded modules
+    dynload_path = os.path.join(stdlib_path, 'lib-dynload')
+    for path in (stdlib_path, dynload_path):
+        if pkgutil.ImpImporter(path).find_module(modname):
+            # If we get back a loader, it's a module
+            return True
+    # If we haven't found it yet, it's not in stdlib
+    return False
+
 
 def empty_stmt():
     new_expr = Node(syms.expr_stmt, [])
     new_stmt = Node(syms.simple_stmt, [new_expr])
     new_stmt.changed()
     return new_stmt
-
-STANDARD_LIBRARY = ['time', 'os', 'sys', 'math', 're', 'string', 'json']
 
 
 class FixImportOrder(BaseFix):
@@ -46,7 +66,7 @@ class FixImportOrder(BaseFix):
             base_module = module.split('.')[0]
 
             # Is the node part of the stdlib?
-            if base_module in STANDARD_LIBRARY:
+            if is_stdlib(base_module):
                 cat_stdlib.append(node)
                 continue
             
