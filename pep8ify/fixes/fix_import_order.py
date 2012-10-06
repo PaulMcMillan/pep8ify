@@ -7,8 +7,7 @@ import pdb
 from pprint import pprint
 pst = pdb.set_trace
 import compiler
-from snakefood import find
-from StringIO import StringIO
+import snakefood.find
 import pkgutil
 import os
 
@@ -18,7 +17,8 @@ def empty_stmt():
     new_stmt.changed()
     return new_stmt
 
-BUILTINS = ['time', 'os', 'sys', 'math', 're', 'string', 'json']
+STANDARD_LIBRARY = ['time', 'os', 'sys', 'math', 're', 'string', 'json']
+
 
 class FixImportOrder(BaseFix):
     u'''
@@ -26,87 +26,70 @@ class FixImportOrder(BaseFix):
     '''
     def start_tree(self, tree, filename):
 #        pst()
-#        # Trim the prefix so header comments don't get juggled
-#        prefix_sep = '\n\n'
-#        original_prefix, _, tail = tree.prefix.rpartition(prefix_sep)
-#        tree.prefix = tail
+        # Save the original prefix so we can put it back at the end
         original_prefix = tree.prefix
         tree.prefix = ''
+
         # Import categories to sort into
-        cat_builtins = []
+        cat_stdlib = []
         cat_external = []
         cat_local = []
 
+        # Build our categorized lists of nodes
         for node in tree.children:
             if not (node.type == symbols.simple_stmt and
                     is_import(node.children[0])):
                         break
-            found_imports = find.get_ast_imports(
+            found_imports = snakefood.find.get_ast_imports(
                 compiler.parse(str(node)))
             module = found_imports[0][0]
             base_module = module.split('.')[0]
-            if base_module in BUILTINS:
-                cat_builtins.append(node)
-                continue
 
-            loader = pkgutil.ImpImporter(os.getcwd()).find_module(base_module)
+            # Is the node part of the stdlib?
+            if base_module in STANDARD_LIBRARY:
+                cat_stdlib.append(node)
+                continue
+            
+            # Is the node an import for the local project?
+            cwd = os.getcwd()
+            loader = pkgutil.ImpImporter(cwd).find_module(base_module)
             if loader:
                 filename = loader.get_filename()
-                if filename and os.path.abspath(filename
-                                                ).startswith(os.getcwd()):
+                if filename and os.path.abspath(filename).startswith(cwd):
                     cat_local.append(node)
                     continue
 
             # otherwise, it's external package
             cat_external.append(node)
 
-        def sortem(node):
+        def _get_import_sort_key(node):
+            """ Given a node, derive a sort key for order comparison. """
+            # remove any prefix (comments and whitespace)
             base = str(node).replace(node.prefix, '', 1).strip()
+            # put "import"s before "from ..."s
             if base.startswith('import'):
                 sort_prefix = '0'
             else:
                 sort_prefix = '1'
             return sort_prefix + base
 
-        all_lists = [sorted(lst, key=sortem) for lst in 
-                     (cat_builtins, cat_external, cat_local)]
+        all_lists = [sorted(lst, key=_get_import_sort_key) for lst in 
+                     (cat_stdlib, cat_external, cat_local)]
         cur_list = []
         for i, node in enumerate(itertools.chain(*all_lists)):
             node.prefix = node.prefix.lstrip()
-            # newline separators between lists. hacky.
+            # add newline separators between lists
             while node not in cur_list:
                 cur_list = all_lists.pop(0)
-                # don't add a newline above the first group
+                # don't add a newline before the first group
                 if node in cur_list and i != 0:
                     node.prefix = '\n' + node.prefix
-
+            # Assign the node to its new location, overwriting the old
             tree.set_child(i, node)
             
         # put the old prefix material back
-#        tree.prefix = original_prefix + prefix_sep + tree.prefix
         tree.prefix = original_prefix + tree.prefix
 
-
+    # Required method, even though we do all our fixups in the tree
     def match(self, node):
         return False
-
-    def transform2(self, node, results):
-        orig_prefix = node.prefix
-        node.prefix= ''
-        nodes = results
-#        pdb.set_trace()
-        if nodes:
-            def sortem(x):
-                return ''.join(map(str, x.children[0].children))
-            sorted_nodes  = sorted(nodes, key=sortem)
-            childs = []
-            for n in sorted_nodes:
-                childs.append(n.children)
-            for n, s, c in zip(nodes, sorted_nodes, childs):
-                print str(n).strip(), '----', str(s).strip()
-                n.children = c
-#                if n.prefix == '\n':
-#                    n.prefix = ''
-            print "------"
-        node.prefix = orig_prefix
-        return node
