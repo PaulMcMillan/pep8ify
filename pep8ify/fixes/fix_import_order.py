@@ -21,6 +21,7 @@ class FixImportOrder(BaseFix):
         tree.prefix = ''
 
         # Import categories to sort into
+        cat_future = []
         cat_stdlib = []
         cat_external = []
         cat_local = []
@@ -30,6 +31,10 @@ class FixImportOrder(BaseFix):
             if not (node.type == symbols.simple_stmt and
                     is_import(node.children[0])):
                         break
+            if '__future__' in str(node):
+                cat_future.append(node)
+                continue
+
             found_imports = snakefood.find.get_ast_imports(
                 compiler.parse(str(node)))
             module = found_imports[0][0]
@@ -59,7 +64,8 @@ class FixImportOrder(BaseFix):
             cat_external.append(node)
 
         all_lists = [sorted(lst, key=self.get_import_sort_key)
-                     for lst in (cat_stdlib, cat_external, cat_local)]
+                     for lst in
+                     (cat_future, cat_stdlib, cat_external, cat_local)]
         cur_list = []
         for i, node in enumerate(itertools.chain(*all_lists)):
             node.prefix = node.prefix.lstrip()
@@ -103,8 +109,13 @@ class FixImportOrder(BaseFix):
         # remove any prefix (comments and whitespace)
         base = str(node).replace(node.prefix, '', 1).strip()
         # put "import"s before "from ..."s
-        if base.startswith('import'):
-            sort_prefix = '0'
+        if base.startswith('from __future__'):
+            sort_prefix = 0
+        elif base.startswith('import'):
+            sort_prefix = 1
+        elif base.startswith('from .'):
+            sort_prefix = 3
         else:
-            sort_prefix = '1'
-        return sort_prefix + base.lower()
+            sort_prefix = 2
+
+        return str(sort_prefix) + base.lower()
