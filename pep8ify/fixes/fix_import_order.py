@@ -74,10 +74,16 @@ class FixImportOrder(BaseFix):
             cwd = os.getcwd()
             loader = pkgutil.ImpImporter(cwd).find_module(base_module)
             if loader:
-                filename = loader.get_filename()
-                if filename and os.path.abspath(filename).startswith(cwd):
+                target = loader.get_filename()
+                if target and os.path.abspath(target).startswith(cwd):
                     cat_local.append(node)
                     continue
+
+            # Is the import for a module in the same directory as this file?
+            local_dir = os.path.dirname(os.path.join(cwd, filename))
+            if pkgutil.ImpImporter(local_dir).find_module(base_module):
+                cat_local.append(node)
+                continue
 
             # otherwise, it's external package
             cat_external.append(node)
