@@ -1,18 +1,14 @@
-from lib2to3.fixer_base import BaseFix
-from lib2to3.pygram import python_symbols as symbols
-from lib2to3.fixer_util import is_import, syms, Node
-import itertools
-
-import pdb
-from pprint import pprint
-pst = pdb.set_trace
 import compiler
-import snakefood.find
-import pkgutil
 import distutils.sysconfig as sysconfig
+import itertools
 import os
-import sys
 import pkgutil
+import sys
+from lib2to3.fixer_base import BaseFix
+from lib2to3.fixer_util import is_import, syms, Node
+from lib2to3.pygram import python_symbols as symbols
+
+import snakefood.find
 
 
 def is_stdlib(modname):
@@ -45,7 +41,6 @@ class FixImportOrder(BaseFix):
     Imports should be sorted alphabetically in groups.
     '''
     def start_tree(self, tree, filename):
-#        pst()
         # Save the original prefix so we can put it back at the end
         original_prefix = tree.prefix
         tree.prefix = ''
