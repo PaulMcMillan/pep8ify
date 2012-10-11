@@ -6,6 +6,7 @@ import pkgutil
 import sys
 from lib2to3.fixer_base import BaseFix
 from lib2to3.fixer_util import is_import
+from lib2to3.pgen2 import token
 from lib2to3.pygram import python_symbols as symbols
 
 import snakefood.find
@@ -26,11 +27,18 @@ class FixImportOrder(BaseFix):
         cat_external = []
         cat_local = []
 
+        first_node_number = 0
         # Build our categorized lists of nodes
         for node in tree.children:
+            if (node.type == symbols.simple_stmt and
+                    node.children[0].type == token.STRING):
+                first_node_number += 1
+                continue
+
             if not (node.type == symbols.simple_stmt and
                     is_import(node.children[0])):
-                        break
+                break
+
             if '__future__' in str(node):
                 cat_future.append(node)
                 continue
@@ -66,17 +74,19 @@ class FixImportOrder(BaseFix):
         all_lists = [sorted(lst, key=self.get_import_sort_key)
                      for lst in
                      (cat_future, cat_stdlib, cat_external, cat_local)]
+
         cur_list = []
         for i, node in enumerate(itertools.chain(*all_lists)):
             node.prefix = node.prefix.lstrip()
             # add newline separators between lists
             while node not in cur_list:
                 cur_list = all_lists.pop(0)
-                # don't add a newline before the first group
-                if node in cur_list and i != 0:
+                # don't add a newline before the first group, but add
+                # one if we had a docstring before the first import.
+                if node in cur_list and (first_node_number or i != 0):
                     node.prefix = '\n' + node.prefix
             # Assign each node to its new location, overwriting the old
-            tree.set_child(i, node)
+            tree.set_child(first_node_number + i, node)
             
         # put the old prefix material back
         tree.prefix = original_prefix + tree.prefix
